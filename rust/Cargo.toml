@@ -1,0 +1,44 @@
+[package]
+name = "paintball-sentry-turret"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mechatronics Project"]
+description = "Paintball Sentry Turret - Automatic color tracking and targeting system for Raspberry Pi"
+readme = "README.md"
+
+[dependencies]
+# OpenCV bindings for image processing
+opencv = { version = "0.92", features = ["videoio", "imgproc", "highgui", "core"] }
+
+# Serial communication with Arduino
+serialport = "4.3"
+
+# Math utilities
+nalgebra = "0.32"
+
+# Time utilities
+chrono = "0.4"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+[[bin]]
+name = "colour_track"
+path = "src/bin/colour_track.rs"
+
+[[bin]]
+name = "calibrate_range"
+path = "src/bin/calibrate_range.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
