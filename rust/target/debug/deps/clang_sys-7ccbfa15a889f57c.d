@@ -1,0 +1,14 @@
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/deps/clang_sys-7ccbfa15a889f57c.d: /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/macros.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/common.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/dynamic.rs
+
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/deps/libclang_sys-7ccbfa15a889f57c.rlib: /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/macros.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/common.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/dynamic.rs
+
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/deps/libclang_sys-7ccbfa15a889f57c.rmeta: /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/macros.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/common.rs /home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/dynamic.rs
+
+/home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/lib.rs:
+/home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/support.rs:
+/home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/src/link.rs:
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/macros.rs:
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/common.rs:
+/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out/dynamic.rs:
+
+# env-dep:OUT_DIR=/home/user/projects/paintball-sentry-turret_Mcksen/rust/target/debug/build/clang-sys-5ade7dba9d583489/out
