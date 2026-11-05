@@ -1,0 +1,1162 @@
+# Python-to-Rust Playbook
+
+A step-by-step process for porting a Python application to Rust.
+
+Designed for AI coding agents with human oversight at key decision points.
+
+Built from the experience of porting \[flowmark\]([https://github.com/jlevy/flowmark](https://github.com/jlevy/flowmark)) and
+
+validated against the full knowledge base.
+
+**Scope:** Complex Python applications with a test suite, especially CLI tools.
+
+The process can still be adapted to libraries, services, and other application types,
+
+but this playbook is validated most strongly on CLI-heavy projects.
+
+**Effort profile:** Roughly half of total effort goes to library workarounds and
+
+cross-validation (Phases 5-6), not initial implementation.
+
+Expect a few human review points regardless of project size.
+
+**Key principle:** Tests are the strongest executable evidence, not the whole
+
+specification. Combine the Python suite with a source-surface inventory and
+
+differential runs over representative and adversarial inputs. Without tests, porting is
+
+guesswork; with tests alone, unenumerated behavior can still be missed.
+
+To improve this playbook through your port, see the
+
+\[meta-playbook\](../\_meta/[meta-improving-this-playbook.md](http://meta-improving-this-playbook.md)).
+
+\* \* \*
+
+## Before You Begin
+
+Before starting Phase 1, confirm your workspace is set up:
+
+\`\`\`
+
+&lt;PROJECT&gt;-rs/
+
+├── repos/
+
+│   ├── &lt;PYTHON_PROJECT&gt;/          # Python source (git submodule)
+
+│   ├── rust-porting-playbook/     # This playbook (git submodule)
+
+│   └── flowmark-rs/               # Working reference port (git submodule)
+
+├── src/
+
+└── Cargo.toml
+
+\`\`\`
+
+**Load these guidelines** into your context before starting:
+
+- \[Porting Principles and Anti-Patterns\](../guidelines/[porting-principles-and-antipatterns.md](http://porting-principles-and-antipatterns.md))
+
+  — non-negotiable rules that override all other guidance
+
+- \[Python-to-Rust Porting Rules\](../guidelines/[python-to-rust-porting-rules.md](http://python-to-rust-porting-rules.md)) — rules,
+
+  patterns, pitfalls, and acceptance criteria
+
+- \[Test Coverage for Porting\](../guidelines/[test-coverage-for-porting.md](http://test-coverage-for-porting.md)) — building
+
+  test coverage as the spec for the port
+
+**Reference resources** (consult as needed during specific phases):
+
+- \[flowmark-rs\]([https://github.com/jlevy/flowmark-rs](https://github.com/jlevy/flowmark-rs)) (`repos/flowmark-rs/`) — a
+
+  production Rust port built with this playbook.
+
+  Use it for working examples of Cargo.toml config, CI workflows, deny.toml, release
+
+  automation, test structure, and maturin/PyPI distribution.
+
+- \[Flowmark case study\](../case-studies/flowmark/) — decisions, tradeoffs, and lessons
+
+  from the flowmark port.
+
+- Additional \[guidelines\](../guidelines/), \[references\](../references/), and
+
+  \[playbooks\](./) are cross-referenced from each phase below.
+
+**Task tracking** (optional but recommended for larger ports): If using
+
+\[tbd\]([https://github.com/jlevy/tbd](https://github.com/jlevy/tbd)) or \[beads\]([https://github.com/steveyegge/beads](https://github.com/steveyegge/beads)) for
+
+issue tracking, set it up now (`tbd setup --auto --prefix=<PREFIX>`).
+
+\* \* \*
+
+## Phase 1: Assess the Original Project
+
+**Goal:** Understand what you’re porting and whether it’s ready.
+
+**Time:** 15-30 minutes.
+
+### 1.1 Measure the codebase
+
+- Count lines of source code (excluding tests, docs, config)
+
+- Count lines of test code
+
+- List all modules/files and their responsibilities
+
+- Identify the entry point(s) and public API surface
+
+- Note the Python version and any version-specific features used
+
+### 1.2 Inventory dependencies
+
+Create a dependency table:
+
+| Python Package | Purpose | Rust Equivalent | Risk |
+
+| --- | --- | --- | --- |
+
+| argparse/click/typer | CLI parsing | clap | Low |
+
+| pytest | Testing | cargo test | Low |
+
+| pyyaml | YAML parsing | serde_yaml_ng | Low |
+
+| marko | Markdown parsing | comrak / pulldown-cmark | **High** |
+
+**Risk levels:**
+
+- **Low:** Well-known Rust equivalent with similar API (regex, serde, clap)
+
+- **Medium:** Rust equivalent exists but behavior may differ
+
+- **High:** Core dependency where behavioral equivalence is critical and not guaranteed
+
+### 1.3 Assess test coverage
+
+\`\`\`bash
+
+uv run pytest --cov=myproject --cov-branch --cov-report=term-missing
+
+\`\`\`
+
+**Coverage thresholds for porting readiness:**
+
+| Component | Minimum | Ideal |
+
+| --- | --- | --- |
+
+| Core library | 80% | 90%+ |
+
+| Public API | 90% | 100% |
+
+| CLI wrapper | 60% | 80%+ |
+
+| Error paths | 50% | 70%+ |
+
+If coverage is below these thresholds, **stop and enhance tests first** — follow
+
+\[Phase 0 of the Test Coverage Playbook\]([python-to-rust-test-coverage-playbook.md](http://python-to-rust-test-coverage-playbook.md)) to
+
+systematically identify gaps and build out the test suite.
+
+Every untested code path is a potential bug in the Rust version that you won’t catch.
+
+**Test sufficiency gate (beyond coverage numbers):**
+
+Coverage numbers alone are insufficient.
+
+Also verify:
+
+- \[ \] Every public CLI option/flag has at least one test exercising it
+
+- \[ \] Error paths are tested (invalid input, missing files, bad arguments)
+
+- \[ \] Edge cases are covered (empty input, Unicode, very large input)
+
+- \[ \] If the project has bash-based golden tests, consider migrating them to
+
+  \[tryscript\]([https://github.com/jlevy/tryscript](https://github.com/jlevy/tryscript)) for better maintainability (see Phase
+
+  0 of the Test Coverage Playbook for migration guidance)
+
+Test coverage investment before porting pays for itself many times over.
+
+### 1.4 Identify areas to clarify
+
+Look for:
+
+- **Implicit behavior:** Things the code does that aren’t tested or documented
+
+- **Ambiguous edge cases:** What happens with empty input?
+
+  Unicode? Very large files?
+
+- **Known bugs:** Existing issues that you’ll need to decide whether to replicate
+
+- **Platform-specific behavior:** File paths, line endings, locale handling
+
+Write tests for anything ambiguous.
+
+The act of writing exact-match tests often reveals bugs in the original -- this is
+
+expected and valuable.
+
+### 1.5 Decision: Is this project ready to port?
+
+**Proceed if:**
+
+- Core test coverage is &gt;= 80%
+
+- All critical dependencies have identified Rust equivalents
+
+- No high-risk dependency remains unevaluated (candidates identified for all)
+
+- The project scope is well-understood
+
+**Pause and prepare if:**
+
+- Test coverage is below thresholds (write more tests first)
+
+- A critical dependency has no clear Rust equivalent (research more)
+
+- The project has significant undocumented behavior
+
+\* \* \*
+
+## Phase 2: Research and Library Evaluation
+
+**Goal:** Choose all Rust dependencies, especially the high-risk ones.
+
+Library choices made here predetermine how much time you’ll spend in Phase 6 (typically
+
+30-50% of total effort).
+
+**Time:** 30-60 minutes for complex dependency profiles.
+
+For projects with zero or minimal runtime dependencies, this phase can be completed in
+
+10-15 minutes — see the fast-path below.
+
+**Fast-path for low-dependency projects:** If the Python project has zero or few runtime
+
+dependencies (stdlib only, or only well-established libraries like `re`, `json`,
+
+`argparse`), the library risk is low and this phase is short.
+
+Map each to the standard Rust equivalent (`regex`, `serde_json`, `clap`) — these are
+
+mature and well-documented.
+
+Skip the multi-candidate evaluation process and proceed to creating a quick proof of
+
+concept that verifies behavioral equivalence on your project’s actual inputs.
+
+Focus the saved time on test coverage (Phase 1.3) and edge-case testing instead.
+
+For filesystem-heavy CLIs, also load the
+
+\[Filesystem-Heavy CLI Porting guideline\](../guidelines/[filesystem-heavy-cli-porting.md](http://filesystem-heavy-cli-porting.md)).
+
+### 2.1 Evaluate candidates for every high-risk dependency
+
+For each dependency rated Medium or High risk:
+
+1. **Identify 2-3 candidates** (search [crates.io](http://crates.io), [lib.rs](http://lib.rs), ask for recommendations)
+
+2. **Create a feature matrix:**
+
+| Feature | Python Lib | Candidate A | Candidate B |
+
+| --- | --- | --- | --- |
+
+| Core feature 1 | Y | Y | Y |
+
+| Core feature 2 | Y | Y | N |
+
+| Feature you need | Y | Partial | Y |
+
+| AST/API access | Y | Full | Event-only |
+
+3. **Run proof-of-concept tests** (5-10 representative inputs from your actual project):
+
+   \`\`\`bash
+
+   # Process with candidate library, diff against Python output
+
+   for input in test-fixtures/input/*; do
+
+       candidate\_process "$input" &gt; candidate\_out
+
+       diff candidate\_out "test-fixtures/expected/$(basename $input)"
+
+   done
+
+   \`\`\`
+
+4. **Count and categorize differences:**
+
+   - 0 diffs: Ideal -- proceed
+
+   - 1-5 cosmetic diffs: Acceptable if workaround-able
+
+   - 6+ diffs or structural diffs: Consider alternatives
+
+5. **Document the decision** with rationale, known limitations, and fallback plan
+
+### 2.2 Evaluation criteria
+
+**Tier 1 (Must-Have):**
+
+- Spec compliance (same standard as Python lib)
+
+- Feature coverage (all features your project uses)
+
+- API capability (can produce the same outputs)
+
+- Active maintenance (commits in last 6 months, issues responded to)
+
+- Supply-chain trust: reputable/maintained crate, sane dependency footprint, and no
+
+  surprising [`build.rs`](http://build.rs)/proc-macro behavior. A port adds a whole new dependency tree, so
+
+  treat library choice as a supply-chain decision — run `cargo deny`/`cargo audit`, apply
+
+  the 14-day cool-off for brand-new versions, and prefer fewer, well-vetted crates.
+
+  See `tbd guidelines supply-chain-hardening`,
+
+  \[Rust Project Setup\](../guidelines/[rust-project-setup.md](http://rust-project-setup.md)#apply-dependency-and-supply-chain-policy),
+
+  and the
+
+  \[Supply Chain Hardening guidebook\]([https://github.com/jlevy/supply-chain-hardening](https://github.com/jlevy/supply-chain-hardening)).
+
+**Tier 2 (Differentiators):**
+
+- Output fidelity (byte-for-byte match with Python)
+
+- Customization (hooks, plugins, configuration)
+
+- Performance and compile time impact
+
+### 2.3 Critical lesson: spec compliance is a false signal
+
+Two libraries can both pass 100% of a specification’s test suite and still produce
+
+different output on real-world inputs.
+
+The flowmark port discovered 15 behavioral differences between two spec-compliant
+
+Markdown parsers. **Always test with your actual inputs, not just feature checkboxes.**
+
+### 2.4 Write a best-practices survey (optional but recommended)
+
+Before writing any code, spend 30 minutes surveying the Rust ecosystem for your
+
+application type. Document: recommended libraries, project setup patterns, CI
+
+configuration, release workflow.
+
+This prevents rework from poor initial choices.
+
+See \[Rust Project Setup\](../guidelines/[rust-project-setup.md](http://rust-project-setup.md)),
+
+\[Rust CLI Rules\](../guidelines/[rust-cli-rules.md](http://rust-cli-rules.md)), and
+
+\[Rust Release Rules\](../guidelines/[rust-release-rules.md](http://rust-release-rules.md)) for CLI projects.
+
+\* \* \*
+
+## Phase 3: Plan the Port
+
+**Goal:** Create a concrete plan that an agent can execute without ambiguity.
+
+**Time:** 15-30 minutes.
+
+### 3.1 Define the architecture
+
+**Single package vs workspace:**
+
+- **Single package** (recommended for most projects): One `Cargo.toml` with
+
+  feature-gated binaries.
+
+  Simpler build, simpler CI, fewer path issues.
+
+- **Workspace:** Only when you have 3+ crates with independent versioning or very
+
+  different dependency sets.
+
+  You can always split later.
+
+**For CLI tools:** Use the lib+bin feature-gate pattern:
+
+\`\`\`toml
+
+[lib]
+
+name = "myproject"
+
+path = "src/[lib.rs](http://lib.rs)"
+
+[[bin]]
+
+name = "myproject"
+
+path = "src/[main.rs](http://main.rs)"
+
+required-features = ["cli"]
+
+[features]
+
+default = ["cli"]
+
+cli = ["clap", "color-eyre", "tracing"]
+
+\`\`\`
+
+### 3.2 Create a feature parity matrix
+
+List every feature/behavior in Python and map to Rust:
+
+| Python Feature | Module | Rust Approach | Status |
+
+| --- | --- | --- | --- |
+
+| Sentence splitting | text\_[utils.py](http://utils.py) | regex + unicode-segmentation | Planned |
+
+| Paragraph wrapping | [formatter.py](http://formatter.py) | Custom + comrak render.width | Planned |
+
+| CLI --auto flag | [cli.py](http://cli.py) | clap derive | Planned |
+
+| YAML config loading | [config.py](http://config.py) | serde_yaml_ng | Planned |
+
+### 3.3 Plan the module porting order
+
+Port in dependency order -- leaf modules first:
+
+1. **Core data types** (Config, Error, constants)
+
+2. **Leaf modules** (utilities, text processing, pure functions)
+
+3. **Integration modules** (modules that combine leaf modules)
+
+4. **CLI layer** (thin wrapper, port last)
+
+### 3.4 Define acceptance criteria
+
+- 100% of ported tests passing
+
+- Cross-validation against Python on all test fixtures
+
+- All differences documented with explicit decisions (accepted / fixed / workaround)
+
+- CI pipeline passing (format, lint, test, audit)
+
+### 3.5 Budget for workarounds
+
+Based on the flowmark experience and general patterns:
+
+| Phase | % of Total Effort |
+
+| --- | --- |
+
+| Research + planning | 15-20% |
+
+| Implementation | 30-40% |
+
+| Bug-fixing + cross-validation | 35-50% |
+
+These ranges reflect worst-case budgeting; see the
+
+\[effort allocation table\](#quick-reference-effort-allocation) for typical actuals.
+
+The fix phase is not waste -- it’s where the port achieves production quality.
+
+Plan for it explicitly rather than treating it as contingency.
+
+\* \* \*
+
+## Phase 4: Set Up the Rust Project
+
+**Goal:** A fully configured project that builds and has CI before any porting begins.
+
+**Time:** 15-30 minutes.
+
+### 4.1 Create the project
+
+\`\`\`bash
+
+cargo init myproject-rs
+
+cd myproject-rs
+
+\`\`\`
+
+### 4.2 Configure Cargo.toml
+
+Essential fields:
+
+\`\`\`toml
+
+[package]
+
+name = "myproject"
+
+version = "0.1.0"
+
+edition = "2024"
+
+rust-version = "1.85"
+
+license = "MIT OR Apache-2.0"
+
+description = "Brief description"
+
+repository = "[https://github.com/user/myproject-rs](https://github.com/user/myproject-rs)"
+
+\`\`\`
+
+Add lint configuration:
+
+\`\`\`toml
+
+[lints.clippy]
+
+pedantic = { level = "warn", priority = -1 }
+
+missing_errors_doc = "allow"
+
+missing_panics_doc = "allow"
+
+module_name_repetitions = "allow"
+
+must_use_candidate = "allow"
+
+[lints.rust]
+
+unsafe_code = "forbid"
+
+\`\`\`
+
+See \[Rust Project Setup\](../guidelines/[rust-project-setup.md](http://rust-project-setup.md)) for complete configuration
+
+including release profile, deny.toml, release.toml, and justfile.
+
+### 4.3 Include the Python source as a submodule
+
+\`\`\`bash
+
+git submodule add [https://github.com/org/python-project.git](https://github.com/org/python-project.git) python-repo
+
+\`\`\`
+
+This lets agents read the Python source directly and provides an exact commit reference
+
+for version correspondence.
+
+### 4.4 Set up test fixtures
+
+\`\`\`
+
+test-fixtures/
+
+├── input/           # Shared inputs (copy from Python)
+
+└── expected/        # Expected outputs (generated by Python)
+
+\`\`\`
+
+Generate expected outputs from the Python implementation:
+
+\`\`\`bash
+
+cd python-repo
+
+for input in ../test-fixtures/input/*; do
+
+    python -m myproject "$input" &gt; "../test-fixtures/expected/$(basename $input)"
+
+done
+
+\`\`\`
+
+### 4.5 Set up CI
+
+Create independent GitHub Actions quality gates for formatting, clippy, cross-platform
+
+tests, MSRV, vulnerability auditing, dependency policy, docs, coverage, semver, and
+
+workflow scripts. See \[Rust Project Setup\](../guidelines/[rust-project-setup.md](http://rust-project-setup.md)) for the
+
+complete workflow.
+
+### 4.6 Track version correspondence
+
+Add to Cargo.toml:
+
+\`\`\`toml
+
+[package.metadata.python_source]
+
+version = "0.5.5"  # Python version this port is based on
+
+\`\`\`
+
+\* \* \*
+
+## Phase 5: Port the Code
+
+**Goal:** A working Rust implementation with all tests passing.
+
+**Effort:** ~33% of total effort.
+
+The largest phase alongside library fixes.
+
+### 5.1 Port tests first
+
+For each module, port its tests before (or alongside) the implementation.
+
+This gives immediate feedback and makes progress measurable.
+
+Progress tracking example: 0/45 → 12/45 → 45/45 → 87/87 → 111/111.
+
+### 5.2 Per-module workflow
+
+For each module, in dependency order:
+
+1. **Read the Python source** and understand what it does
+
+2. **Create the Rust file** with a mapping header comment:
+
+   \`\`\`rust
+
+   //! Ported from Python: myproject/text\_[utils.py](http://utils.py)
+
+   \`\`\`
+
+3. **Port the tests** for this module
+
+4. **Implement** until all tests pass
+
+5. **Run cross-validation** against Python output
+
+### 5.3 Maintain traceability
+
+- Keep function names aligned with Python where reasonable
+
+- Add mapping comments for non-obvious translations:
+
+  \`\`\`rust
+
+  // Python: re.match(pattern, text) -- note: anchored at start
+
+  if [regex.is](http://regex.is)\_match(text) { ... }
+
+  \`\`\`
+
+- Mark library workarounds with `HACK:` comments and items needing future resolution
+
+  with `FIXME:`:
+
+  \`\`\`rust
+
+  /// HACK: comrak escapes underscores but Python doesn't.
+
+  /// Workaround: post-process to remove unnecessary escapes.
+
+  fn fix_underscore_escaping(text: &amp;str) -&gt; String { ... }
+
+  \`\`\`
+
+### 5.4 Maintain a parity tracking spec
+
+For non-trivial ports, maintain a structured “parity spec” document alongside the code
+
+that tracks:
+
+- **Exact parity definition** (what “parity” means for this project)
+
+- **Current status** (mapped tests, passing tests, known gaps)
+
+- **All known discrepancies** with status (fixed, accepted, open)
+
+- **Test mapping coverage** (see
+
+  \[Cross-Language Test Mapping\](../references/[cross-language-test-mapping.md](http://cross-language-test-mapping.md)))
+
+This document serves as the single source of truth for the porting effort’s progress and
+
+prevents drift across multiple agent sessions.
+
+Update it after every significant milestone.
+
+### 5.5 Key pitfalls to watch for
+
+**Regex anchoring:** Python’s `re.match()` anchors at start; Rust’s `is_match()` does
+
+not. Add `^` to patterns translated from `re.match()`.
+
+**String handling:** Don’t add `.trim()` unless Python does.
+
+Whitespace preservation matters for text formatters, config parsers, etc.
+
+**Arena/lifetime patterns:** When a library uses arena allocation (like comrak), use the
+
+closure pattern:
+
+\`\`\`rust
+
+pub fn with_ast&lt;F, R&gt;(text: &amp;str, f: F) -&gt; Result&lt;R&gt;
+
+where F: for&lt;'a&gt; FnOnce(&amp;'a AstNode&lt;'a&gt;) -&gt; Result&lt;R&gt;
+
+\`\`\`
+
+**Error types:** Map Python exceptions to a Rust error enum with `thiserror`. Don’t use
+
+`unwrap()` in library code.
+
+**Dict ordering:** Python `dict` preserves insertion order (since 3.7); Rust `HashMap`
+
+does not. If iteration order matters, use `IndexMap` from the `indexmap` crate.
+
+**None handling:** Python uses `None` with runtime checks; Rust uses `Option<T>`
+
+enforced at compile time.
+
+Map `Optional[T]` to `Option<T>` and `if x is not None` to `if let Some(x) = value`.
+
+**Integer overflow:** Python integers have arbitrary precision; Rust integers overflow
+
+(wrapping in release, panicking in debug).
+
+Use `checked_*` or `saturating_*` methods when porting arithmetic from Python,
+
+especially for user-supplied values.
+
+**Unicode:** Use `\u{XXXX}` for Unicode escapes (not `\uXXXX`). Consider
+
+`unicode-segmentation` for grapheme-aware text processing.
+
+\* \* \*
+
+## Phase 6: Handle Library Differences
+
+**Goal:** Systematic resolution of all behavioral differences between Python and Rust
+
+libraries.
+
+**Effort:** ~32% of total effort (often the single largest phase).
+
+### 6.1 Run cross-validation and categorize failures
+
+Run both implementations against all test fixtures and categorize every difference:
+
+| Category | Action |
+
+| --- | --- |
+
+| **Porting bug** | Fix immediately (your code is wrong) |
+
+| **Library difference** | Evaluate: workaround or accept? |
+
+| **Python bug** | Decide: replicate for parity or fix in Rust? |
+
+| **Intentional improvement** | Document and accept |
+
+### 6.2 Workaround strategy
+
+For each library difference, try in order:
+
+1. **Post-processing** (fix library output): Safer, most common.
+
+   Build a pipeline of `fix_*` functions applied after the library processes input.
+
+2. **Pre-processing** (modify input before library): Use sparingly.
+
+   Riskier because you’re modifying input without full parsing context.
+
+3. **Accept and document:** When the difference is cosmetic and both outputs are valid.
+
+4. **Vendor/fork:** When the library has a bug with a known fix &lt; 50 lines.
+
+5. **Switch libraries:** When there are &gt; 3 unfixable differences or a core feature is
+
+   broken.
+
+### 6.3 Track workarounds systematically
+
+Every workaround gets a consistent `HACK:` comment (for library workarounds) or `FIXME:`
+
+comment (for items needing future resolution) with:
+
+- What the difference is
+
+- Why it exists (library behavior)
+
+- Impact level (cosmetic / functional / critical)
+
+This creates a searchable inventory: `grep -rn "HACK:\|FIXME:" src/`
+
+### 6.4 Handling bugs in the original
+
+Porting frequently reveals bugs in the original because test writing forces exact
+
+specification of behavior.
+
+When you find one:
+
+1. Confirm it’s a bug (run the Python code manually)
+
+2. Write a failing test in the Python repo
+
+3. File a bug/PR upstream
+
+4. Decide: replicate the bug for byte-for-byte parity, or fix it in Rust
+
+5. If fixing: document the intentional divergence and add a test proving Rust is correct
+
+6. Track for sync: when Python fixes the bug, remove the divergence note
+
+### 6.5 Decision point: library switch
+
+**Switch libraries if:**
+
+- More than 3 unfixable behavioral differences
+
+- A core feature is broken or missing
+
+- The cost of workarounds exceeds the cost of switching
+
+- You’re early enough in the port to absorb the cost
+
+**Don’t switch if:**
+
+- Differences are cosmetic and both outputs are valid
+
+- Workarounds are isolated and testable
+
+- You’re past 50% implementation
+
+\* \* \*
+
+## Phase 7: Finalize and Validate
+
+**Goal:** Production-ready port with full CI, documentation, and cross-validation.
+
+**Time:** 30-60 minutes.
+
+### 7.1 Cross-validation gate
+
+Write a cross-validation script that:
+
+1. Builds the Rust binary
+
+2. Runs both Python and Rust against all test fixtures
+
+3. Diffs the outputs
+
+4. Reports pass/fail per fixture
+
+**The port is not done until cross-validation passes** (with documented exceptions for
+
+intentional divergences).
+
+### 7.2 CLI parity (for CLI tools)
+
+If porting a CLI tool, verify:
+
+- `--help` output matches Python’s format and content
+
+- All flags and arguments work identically
+
+- Exit codes match (0 = success, 1 = error, 2 = usage error)
+
+- stdin/stdout/stderr routing matches
+
+- Error messages are comparable
+
+For argument mapping from Python to Rust:
+
+- `argparse` / `click` / `typer` all map to `clap` with derive API
+
+- Enable clap’s `cargo` feature for automatic `--version` from Cargo.toml
+
+- Use `color-eyre` for rich error display
+
+See \[CLI-Specific Porting Patterns\](../guidelines/[python-to-rust-cli-porting.md](http://python-to-rust-cli-porting.md)) for
+
+detailed argument mapping tables.
+
+### 7.3 CI verification
+
+All CI jobs must pass:
+
+- `cargo fmt --all -- --check`
+
+- `cargo clippy --all-targets --all-features -- -D warnings`
+
+- `cargo test --all-features --locked`
+
+- `cargo test --no-default-features --locked`
+
+- `cargo audit`
+
+- `cargo deny check`
+
+- `cargo doc` with `-D warnings`
+
+- MSRV check against declared `rust-version`
+
+### 7.4 Documentation
+
+- README with installation, usage, and comparison to Python version
+
+- `--version` output showing both Rust and Python source versions
+
+- CHANGELOG documenting the port
+
+- All intentional divergences from Python documented
+
+### 7.5 Release configuration
+
+Set up `release.toml` for cargo-release and a release CI workflow for cross-platform
+
+binary builds. See \[Rust Project Setup\](../guidelines/[rust-project-setup.md](http://rust-project-setup.md)) for
+
+templates.
+
+For Python-to-Rust ports, consider multi-channel distribution to preserve the original
+
+install experience:
+
+- **PyPI via maturin:** Add `pyproject.toml` with `bindings = "bin"` so users can
+
+  `uvx <tool>` or `pip install <tool>` — same workflow as the original Python package.
+
+  This is especially valuable when the Python original was distributed via PyPI.
+
+- **Homebrew tap:** Personal tap with SHA256-pinned formula for macOS users.
+
+- **[crates.io](http://crates.io):** Standard Rust distribution (`cargo install` / `cargo binstall`).
+
+See \[Rust Release Rules\](../guidelines/[rust-release-rules.md](http://rust-release-rules.md)#coordinate-multiple-channels-without-rebuilding)
+
+for the release policy and the
+
+\[PyPI distribution research\](../docs/project/research/[research-rust-cli-pypi-distribution.md](http://research-rust-cli-pypi-distribution.md))
+
+for detailed guidance on the maturin approach.
+
+\* \* \*
+
+## Phase 8: Ongoing Synchronization
+
+**Goal:** Keep the Rust port in sync as the Python version evolves.
+
+**Time:** Ongoing; each sync cycle takes 30-120 minutes depending on scope of Python
+
+changes.
+
+### 8.0 Recommended release cadence for mature ports
+
+For active projects, treat maintenance as two explicit release modes:
+
+1. **Rust-only stabilization release** (same upstream Python baseline): internal
+
+   cleanups, docs, build/release hardening, and parity fixes that do not change the
+
+   Python baseline.
+
+2. **Upstream sync release** (new upstream Python baseline): port changes from the next
+
+   upstream Python release.
+
+This reduces release risk and keeps version correspondence clear.
+
+See \[[python-to-rust-sync-release-workflow.md](http://python-to-rust-sync-release-workflow.md)\]([python-to-rust-sync-release-workflow.md](http://python-to-rust-sync-release-workflow.md))
+
+for the full sequence and agent prompts.
+
+### 8.1 When Python updates
+
+1. Update the git submodule to the new Python version
+
+2. Regenerate expected test fixtures from Python
+
+3. Run cross-validation to find new differences
+
+4. Categorize each change: bug fix / new feature / test addition / refactor
+
+5. Port changes to Rust, running tests after each change
+
+6. Update version correspondence in Cargo.toml metadata
+
+### 8.2 Sync tracking
+
+Maintain a sync log documenting each update:
+
+\`\`\`markdown
+
+## Sync: Python 0.5.5 → 0.5.6 (2026-02-15)
+
+- Bug fix: heading spacing (ported, test added)
+
+- New feature: --json output (ported)
+
+- Refactor: split utils module (not ported, Rust structure differs)
+
+- Intentional divergence: list spacing (maintained)
+
+\`\`\`
+
+### 8.3 Divergence management
+
+Over time, intentional divergences accumulate.
+
+Track them:
+
+- Divergences where Rust is better (keep)
+
+- Divergences forced by library differences (revisit if library updates)
+
+- Divergences from Python bugs (remove when Python fixes them)
+
+\* \* \*
+
+## Quick Reference: Effort Allocation
+
+| Phase | % of Total | Notes |
+
+| --- | --- | --- |
+
+| 1. Assess | 5% | Quick if test coverage is already measured |
+
+| 2. Research | 10% | High-leverage: thorough research shrinks Phase 6 |
+
+| 3. Plan | 5% |  |
+
+| 4. Set up | 5% |  |
+
+| 5. Port | 33% | Tests first, module by module |
+
+| 6. Library fixes | 32% | Often the single largest phase |
+
+| 7. Finalize | 10% | CLI parity, docs, release config |
+
+Phase 6 (library fixes) is consistently the largest effort sink.
+
+Budget for it explicitly.
+
+If your library evaluation in Phase 2 is thorough, Phase 6 shrinks significantly.
+
+## Checklist Summary
+
+\`\`\`
+
+ASSESS
+
+☐ Measure codebase (lines, modules, dependencies)
+
+☐ Inventory dependencies with risk ratings
+
+☐ Measure test coverage (&gt;= 80% core before proceeding)
+
+☐ Identify ambiguous behavior and write tests for it
+
+☐ Decision: ready to port?
+
+RESEARCH
+
+☐ Evaluate 2-3 candidates for each high-risk dependency
+
+☐ Create feature comparison matrices
+
+☐ Run proof-of-concept with real inputs (not just feature checkboxes)
+
+☐ Document decisions with rationale and fallback plans
+
+PLAN
+
+☐ Choose architecture (single package + feature flags recommended)
+
+☐ Create feature parity matrix
+
+☐ Plan module porting order (leaf-first)
+
+☐ Define acceptance criteria
+
+☐ Budget 35-50% of time for workarounds
+
+SET UP
+
+☐ Create project with Cargo.toml, lints, release profile
+
+☐ Add Python source as git submodule
+
+☐ Set up test fixtures (input/ and expected/)
+
+☐ Set up the complete parallel CI quality-gate suite
+
+☐ Create justfile with check/fix/precommit targets
+
+PORT
+
+☐ Port tests first, then implementation
+
+☐ Port modules in dependency order (leaf → integration → CLI)
+
+☐ Maintain traceability (mapping comments, function name parity)
+
+☐ Watch for key pitfalls (regex anchoring, dict ordering, integer overflow, None→Option)
+
+☐ Mark all workarounds with HACK:/FIXME: comments
+
+☐ Run cross-validation continuously
+
+LIBRARY FIXES
+
+☐ Categorize all failures (porting bug / library diff / Python bug)
+
+☐ Build post-processing pipeline for library differences
+
+☐ Accept unfixable differences and document them
+
+☐ Decide on Python bugs (replicate vs fix)
+
+☐ Evaluate: switch libraries if &gt; 3 unfixable differences
+
+FINALIZE
+
+☐ Cross-validation passes on all fixtures
+
+☐ CLI parity verified (if applicable)
+
+☐ All CI jobs passing
+
+☐ Documentation complete (README, --version, CHANGELOG)
+
+☐ Release workflow configured
+
+SYNC (ongoing)
+
+☐ Choose release mode: stabilization (same baseline) vs upstream sync (new baseline)
+
+☐ If stabilization mode, follow [python-to-rust-sync-release-workflow.md](http://python-to-rust-sync-release-workflow.md) Mode A
+
+☐ Update git submodule to new Python version
+
+☐ Regenerate expected test fixtures
+
+☐ Run cross-validation, categorize differences
+
+☐ Port changes and update version correspondence
+
