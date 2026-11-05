@@ -1,0 +1,9 @@
+[target]
+armv7-linux-gnueabihf = "armv7-linux-gnueabihf"
+
+[dependencies]
+
+[build]
+
+[profile.release]
+opt-level = "3"

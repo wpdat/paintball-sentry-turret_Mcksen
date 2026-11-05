@@ -1,0 +1,13 @@
+[Unit]
+Description=Paintball Sentry Turret Service
+
+[Service]
+ExecStart=/usr/bin/rustc --crate-type bin src/main.rs -o /usr/local/bin/paintball-sentry-turret
+ExecStartPost=/usr/bin/sudo /usr/bin/systemctl enable paintball-sentry-turret
+ExecStartPost=/usr/bin/sudo /usr/bin/systemctl start paintball-sentry-turret
+Restart=always
+User=root
+WorkingDirectory=/home/jetson/paintball-sentry-turret
+
+[Install]
+WantedBy=multi-user.target
