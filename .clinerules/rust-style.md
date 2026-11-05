@@ -1,8 +1,8 @@
 
 ---
 paths:
-  - "src/**/*.rs"
-  - "Cargo.toml"
+  - "rust/src/**/*.rs"
+  - "rust/Cargo.toml"
 ---
 # Rust-Style Guide
 - Verwende snake\_case für Variablennamen und Funktionen.

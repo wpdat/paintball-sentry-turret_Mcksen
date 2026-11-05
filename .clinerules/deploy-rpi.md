@@ -1,8 +1,8 @@
 ---
 paths:
-  - "Cross.toml"
-  - ".cargo/**"
-  - "scripts/build*"
+  - "rust/Cross.toml"
+  - "rust/.cargo/**"
+  - "rust/scripts/build*"
 ---
 # Deployment Guide for Raspberry Pi
 - Verwende den `deploy/rpi.service`-Datei für die systemd-Unit-Datei.

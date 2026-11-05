@@ -1,8 +1,8 @@
 ---
 paths:
-  - "Cross.toml"
-  - ".cargo/**"
-  - "scripts/build*"
+  - "rust/Cross.toml"
+  - "rust/.cargo/**"
+  - "rust/scripts/build*"
 ---
 # Rust Cross-Compilation Guide
 - Verwende Cross.toml für die Konfiguration der Toolchain.

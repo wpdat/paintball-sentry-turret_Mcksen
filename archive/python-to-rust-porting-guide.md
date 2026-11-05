@@ -1,3 +1,11 @@
+---
+paths:
+  - "rust/src/**/*.rs"
+  - "rust/Cross.toml"
+  - "rust/.cargo/**"
+  - "rust/scripts/build*"
+---
+
 # Python to Rust CLI Porting Guide
 
 This document covers a systematic process for porting modern Python CLI applications to
@@ -5,20 +13,6 @@ This document covers a systematic process for porting modern Python CLI applicat
 Rust for use by AI agents, maintaining feature parity through comprehensive test
 
 fixtures.
-
-\*\*Checklists:\*\* \[Initial Port\]([port-checklist-initial-template.md](http://port-checklist-initial-template.md)) |
-
-\[Subsequent Updates\]([port-checklist-update-template.md](http://port-checklist-update-template.md))
-
-\*\*Related:\*\* \[Rust Guideline Index\](../guidelines/[README.md](http://README.md)) |
-
-\[Rust CLI Rules\](../guidelines/[rust-cli-rules.md](http://rust-cli-rules.md))
-
-\*\*Last update:\*\* 2026-05-27
-
-\*\*Update instructions:\*\* After any port, review this document and make any additions to
-
-reflect the best, tested porting process, in particular adding to the pitfalls or useful
 
 patterns for any general and non-obvious porting situations.
 
