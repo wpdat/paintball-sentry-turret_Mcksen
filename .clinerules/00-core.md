@@ -1,4 +1,10 @@
 # KIHR5 Kernregeln
+- Rust-Code lebt IMMER im Unterverzeichnis `rust/` (Crate-Root mit Cargo.toml, Cargo.lock, src/, scripts/, target/). Keine Cargo-Dateien außerhalb von rust/ anlegen. Alle cargo/cross-Befehle aus rust/ heraus ausführen.
+- Zielplattformen: Raspberry Pi 5 (aarch64) und NVIDIA Jetson (aarch64).
+- Erst lesen (rust/Cargo.toml, bestehende Module), dann ändern. Keine neuen Abhängigkeiten ohne Not; bevorzuge std + etablierte Crates (serde, tokio, clap).
+- Fehler nie umschreiben/unterdrücken – Ursache fixen.
+- Kurze, gezielte Aufgaben; keine Riesen-Refactorings in einem Task.
+- Commits: Conventional Commits, eine logische Änderung pro Commit.
 - Rust-Projekt; Zielplattformen: Raspberry Pi 5 (aarch64) und NVIDIA Jetson (aarch64).
 - Erst lesen (Cargo.toml, bestehende Module), dann ändern. Keine neuen Abhängigkeiten ohne Not; bevorzuge std + etablierte Crates (serde, tokio, clap).
 - Fehler nie umschreiben/unterdrücken – Ursache fixen.
