@@ -1,17 +1,17 @@
 //! Trigonometric and coordinate transformation module
-//! 
+//!
 //! This module contains functions that find the target in space.
 //! Assumes: 640x480 resolution
 //! Units: radians, meters
-//! 
+//!
 //! # Coordinate System
-//! 
+//!
 //! - Camera center: (320, 240) => (0, 0) radians
 //! - Top-left: (0, 0) => (-24°, 18°)
 //! - Bottom-right: (640, 480) => (24°, -18°)
-//! 
+//!
 //! # Field of View
-//! 
+//!
 //! - FOV: 60° with 4:3 aspect ratio
 //! - X-FOV: 48°
 //! - Y-FOV: 36°
@@ -19,8 +19,8 @@
 use std::f64::consts::PI;
 
 /// Camera field of view constants
-pub const CAMERA_FOV_X: f64 = 48.0;  // degrees
-pub const CAMERA_FOV_Y: f64 = 36.0;  // degrees
+pub const CAMERA_FOV_X: f64 = 48.0; // degrees
+pub const CAMERA_FOV_Y: f64 = 36.0; // degrees
 pub const CAMERA_RESOLUTION_X: f64 = 640.0;
 pub const CAMERA_RESOLUTION_Y: f64 = 480.0;
 
@@ -31,9 +31,9 @@ pub const DEFAULT_RANGE_Z: f64 = 5.0;
 pub const OBJECT_HEIGHT: f64 = 0.54;
 
 /// Camera to gun offset constants
-pub const GUN_OFFSET_X: f64 = -0.11;  // meters
-pub const GUN_OFFSET_Y: f64 = -0.26;  // meters
-pub const GUN_OFFSET_Z: f64 = 0.15;   // meters
+pub const GUN_OFFSET_X: f64 = -0.11; // meters
+pub const GUN_OFFSET_Y: f64 = -0.26; // meters
+pub const GUN_OFFSET_Z: f64 = 0.15; // meters
 
 /// Servo signal constants
 pub const SERVO_DEGREE_FACTOR: f64 = 0.325;
@@ -57,21 +57,21 @@ pub fn rad_to_deg(rad: f64) -> f64 {
 }
 
 /// Transforms points on screen to angles in camera
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `x` - X pixel coordinate (0-640)
 /// * `y` - Y pixel coordinate (0-480)
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (theta, phi) angles in radians
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use paintball_sentry_turret::trig::px_to_angle;
-/// 
+///
 /// // Center of screen => (0, 0)
 /// let (theta, phi) = px_to_angle(320.0, 240.0);
 /// assert!((theta.abs() < 0.01) && (phi.abs() < 0.01));
@@ -87,14 +87,14 @@ pub fn px_to_angle(x: f64, y: f64) -> (f64, f64) {
 }
 
 /// Finds the cartesian location from 2 angles and estimating a range
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `theta` - Horizontal angle in radians
 /// * `phi` - Vertical angle in radians
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (x, y, z) coordinates in meters
 pub fn cam_polar_cart_z(theta: f64, phi: f64) -> (f64, f64, f64) {
     let z = DEFAULT_RANGE_Z;
@@ -104,15 +104,15 @@ pub fn cam_polar_cart_z(theta: f64, phi: f64) -> (f64, f64, f64) {
 }
 
 /// Finds the cartesian location from 2 angles and knowing the height of the object
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `theta` - Horizontal angle in radians
 /// * `phi` - Vertical angle in radians
 /// * `h` - Height of object in pixels
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (x, y, z) coordinates in meters
 pub fn cam_polar_cart_h(theta: f64, phi: f64, h: f64) -> (f64, f64, f64) {
     let z = OBJECT_HEIGHT / deg_to_rad(0.075 * h).tan();
@@ -122,15 +122,15 @@ pub fn cam_polar_cart_h(theta: f64, phi: f64, h: f64) -> (f64, f64, f64) {
 }
 
 /// Shifts cartesian coordinates from camera to gun reference frame
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `x` - X coordinate in camera frame
 /// * `y` - Y coordinate in camera frame
 /// * `z` - Z coordinate in camera frame
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (x, y, z) in gun reference frame
 pub fn shift_cart(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
     // a, b, c is gun to cam, on relative gun cart
@@ -138,17 +138,17 @@ pub fn shift_cart(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
 }
 
 /// Takes a point in space and aims the barrel towards that point
-/// 
+///
 /// Assumes that the center of rotation of the gun is at the origin.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `x` - X coordinate in gun frame
 /// * `y` - Y coordinate in gun frame
 /// * `z` - Z coordinate in gun frame
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (theta, phi) in radians
 /// - theta: controls the pan (horizontal)
 /// - phi: controls the tilt (vertical)
@@ -159,20 +159,20 @@ pub fn gun_cart_to_polar(x: f64, y: f64, z: f64) -> (f64, f64) {
 }
 
 /// Converts the polar angles to actual degrees the servo will use
-/// 
+///
 /// # Servo Calibration
-/// 
+///
 /// - Degree = Position Raw Data × 0.325
 /// - (21, 1002) max but probably never should reach that
 /// - 512 - Center of rotation
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `theta` - Pan angle in radians
 /// * `phi` - Tilt angle in radians
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (pan, tilt) servo signal values
 pub fn signal_from_polar(theta: f64, phi: f64) -> (i32, i32) {
     let a = -rad_to_deg(theta) / SERVO_DEGREE_FACTOR + PAN_CENTER as f64;
@@ -180,17 +180,11 @@ pub fn signal_from_polar(theta: f64, phi: f64) -> (i32, i32) {
 
     // Safety bounds check
     if a < PAN_MIN as f64 || a > PAN_MAX as f64 {
-        eprintln!(
-            "!!!!!!!!!!! a = {} went beyond 90Deg !!!!!!!!!!!!!",
-            a
-        );
+        eprintln!("!!!!!!!!!!! a = {} went beyond 90Deg !!!!!!!!!!!!!", a);
         return (PAN_CENTER, TILT_CENTER);
     }
     if b < TILT_MIN as f64 || b > TILT_MAX as f64 {
-        eprintln!(
-            "!!!!!!!!!!! b = {} went beyond 90Deg !!!!!!!!!!!!!",
-            b
-        );
+        eprintln!("!!!!!!!!!!! b = {} went beyond 90Deg !!!!!!!!!!!!!", b);
         return (PAN_CENTER, TILT_CENTER);
     }
 
@@ -224,21 +218,21 @@ impl Position {
 }
 
 /// Finds the velocity of the marker
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `gun_cart` - Current position in gun frame
 /// * `last_gun_cart` - Previous position in gun frame
 /// * `dt` - Time delta in seconds
-/// 
+///
 /// # Returns
-/// 
+///
 /// Velocity vector
 pub fn compute_velocity(gun_cart: Position, last_gun_cart: Position, dt: f64) -> Velocity {
     if dt <= 0.0 {
         return Velocity::default();
     }
-    
+
     Velocity {
         vx: ((gun_cart.x - last_gun_cart.x) / dt * 1000.0).round() / 1000.0,
         vy: ((gun_cart.y - last_gun_cart.y) / dt * 1000.0).round() / 1000.0,
@@ -247,19 +241,19 @@ pub fn compute_velocity(gun_cart: Position, last_gun_cart: Position, dt: f64) ->
 }
 
 /// Estimates the position of the marker with velocity
-/// 
+///
 /// Uses last clock time to estimate next position.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `gun_cart` - Current position
 /// * `v` - Velocity vector
-/// * `dt` - Time delta for prediction
-/// 
+/// * `_dt` - Ignored; a fixed prediction horizon is used (as in the Python version)
+///
 /// # Returns
-/// 
+///
 /// Estimated next position
-pub fn est_next_pos(gun_cart: Position, v: Velocity, dt: f64) -> Position {
+pub fn est_next_pos(gun_cart: Position, v: Velocity, _dt: f64) -> Position {
     let prediction_dt = 0.1; // Fixed prediction time
     Position {
         x: gun_cart.x + v.vx * prediction_dt,
@@ -269,19 +263,19 @@ pub fn est_next_pos(gun_cart: Position, v: Velocity, dt: f64) -> Position {
 }
 
 /// Main transformation function: takes the position from the camera and returns pan and tilt for the turret
-/// 
+///
 /// This is the primary function that converts camera pixel coordinates to servo signals.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `cx` - Current X pixel coordinate
 /// * `cy` - Current Y pixel coordinate
 /// * `last_cx` - Optional previous X pixel coordinate (for prediction)
 /// * `last_cy` - Optional previous Y pixel coordinate (for prediction)
 /// * `dt` - Optional time delta (for prediction)
-/// 
+///
 /// # Returns
-/// 
+///
 /// Tuple of (pan, tilt) servo signal values
 pub fn cam_to_gun(
     cx: f64,

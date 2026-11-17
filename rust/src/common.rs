@@ -1,12 +1,11 @@
 //! Common utilities and helper functions
-//! 
+//!
 //! This module contains common routines used by other modules,
 //! including OpenCV utilities, drawing functions, and helper classes.
 
 use opencv::{
-    core::{Mat, Point, Scalar, Size, Vector},
+    core::{Mat, Point, Scalar, Vector},
     imgproc::{self, FONT_HERSHEY_PLAIN, LINE_8},
-    highgui,
     prelude::*,
     Result as OpenCvResult,
 };
@@ -50,11 +49,11 @@ pub fn splitfn(fn_path: &str) -> (&str, &str, &str) {
     let path_end = fn_path.rfind('/').unwrap_or(0);
     let path = &fn_path[..path_end];
     let filename = &fn_path[path_end..];
-    
+
     let ext_start = filename.rfind('.').unwrap_or(filename.len());
     let name = &filename[..ext_start];
     let ext = &filename[ext_start..];
-    
+
     (path, name, ext)
 }
 
@@ -124,9 +123,9 @@ impl Default for StatValue {
 }
 
 /// Draws text on an image with shadow effect
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `dst` - Destination image
 /// * `x` - X coordinate
 /// * `y` - Y coordinate  
@@ -135,7 +134,7 @@ pub fn draw_str(dst: &mut Mat, x: i32, y: i32, s: &str) -> OpenCvResult<()> {
     let font_scale = 1.0;
     let thickness = 1;
     let line_type = LINE_8;
-    
+
     // Draw shadow (black)
     imgproc::put_text(
         dst,
@@ -148,7 +147,7 @@ pub fn draw_str(dst: &mut Mat, x: i32, y: i32, s: &str) -> OpenCvResult<()> {
         line_type,
         false,
     )?;
-    
+
     // Draw text (white)
     imgproc::put_text(
         dst,
@@ -161,7 +160,7 @@ pub fn draw_str(dst: &mut Mat, x: i32, y: i32, s: &str) -> OpenCvResult<()> {
         line_type,
         false,
     )?;
-    
+
     Ok(())
 }
 
@@ -230,13 +229,13 @@ pub struct ContourResult {
 }
 
 /// Finds the largest contour and calculates its centroid
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `contours` - Vector of contours
-/// 
+///
 /// # Returns
-/// 
+///
 /// Optional ContourResult with center coordinates and area
 pub fn find_largest_contour(contours: &Vector<Vector<Point>>) -> Option<ContourResult> {
     let mut max_area: f64 = 0.0;
@@ -252,11 +251,11 @@ pub fn find_largest_contour(contours: &Vector<Vector<Point>>) -> Option<ContourR
 
     if let Some(cnt) = best_cnt {
         let moments = imgproc::moments(&cnt, false).ok()?;
-        
+
         if moments.m00 > 0.0 {
             let cx = (moments.m10 / moments.m00) as i32;
             let cy = (moments.m01 / moments.m00) as i32;
-            
+
             Some(ContourResult {
                 center_x: cx,
                 center_y: cy,
@@ -333,10 +332,10 @@ mod tests {
     fn test_stat_value() {
         let mut sv = StatValue::new(0.5);
         assert_eq!(sv.value, None);
-        
+
         sv.update(10.0);
         assert_eq!(sv.value, Some(10.0));
-        
+
         sv.update(20.0);
         assert_eq!(sv.value, Some(15.0)); // 0.5 * 10 + 0.5 * 20
     }

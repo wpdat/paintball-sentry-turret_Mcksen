@@ -1,34 +1,32 @@
 //! Colour Track - Main color tracking program
-//! 
+//!
 //! This is the main program for the paintball sentry turret.
 //! It captures video from a camera, detects colored objects using HSV color space,
 //! calculates the target position, and optionally sends commands to an Arduino
 //! for servo control.
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```bash
 //! cargo run --bin colour_track
 //! ```
-//! 
+//!
 //! # Controls
-//! 
+//!
 //! - ESC: Exit the program
 
 use anyhow::{Context, Result};
 use opencv::{
-    core::{Mat, Point, Scalar, Size, Vector, CV_8UC3},
-    imgproc::{self, COLOR_BGR2HSV, RETR_LIST, CHAIN_APPROX_SIMPLE},
+    core::{Mat, Point, Scalar, Size, Vector},
     highgui,
-    videoio,
+    imgproc::{self, CHAIN_APPROX_SIMPLE, COLOR_BGR2HSV, RETR_LIST},
     prelude::*,
+    videoio::{self, VideoWriter},
 };
 use std::io::Write;
 
 use paintball_sentry_turret::{
-    common::{
-        clock, draw_str, find_largest_contour, ArduinoConfig, HsvRange, Preferences,
-    },
+    common::{clock, draw_str, find_largest_contour, ArduinoConfig, HsvRange, Preferences},
     trig::cam_to_gun,
 };
 
@@ -43,13 +41,13 @@ impl ArduinoSerial {
             .timeout(std::time::Duration::from_millis(100))
             .open()
             .ok();
-        
+
         if port.is_some() {
             println!("Arduino connected on {}", config.port);
         } else {
             eprintln!("Warning: Could not open serial port {}", config.port);
         }
-        
+
         Self { port }
     }
 
@@ -71,39 +69,56 @@ impl ArduinoSerial {
 fn main() -> Result<()> {
     // Initialize logging
     env_logger::init();
-    
+
     println!("Paintball Sentry Turret - Colour Track");
     println!("=======================================");
     println!("Press ESC to exit");
-    
+
     // Configuration
     let prefs = Preferences::new();
     let arduino_config = ArduinoConfig::new();
     let hsv_range = HsvRange::default_orange();
-    
+
     // Initialize video capture (device 1 as in Python version)
     let mut cap = videoio::VideoCapture::new(1, videoio::CAP_ANY)
         .context("Failed to open video capture device 1")?;
-    
+
     if !cap.is_opened()? {
         // Try device 0 as fallback
         cap = videoio::VideoCapture::new(0, videoio::CAP_ANY)
             .context("Failed to open video capture device 0")?;
     }
-    
+
     if !cap.is_opened()? {
         anyhow::bail!("Could not open any video capture device");
     }
-    
+
     println!("Video capture initialized");
-    
+
     // Initialize Arduino serial connection if enabled
     let mut arduino: Option<ArduinoSerial> = if prefs.arduino_enabled {
         Some(ArduinoSerial::new(&arduino_config))
     } else {
         None
     };
-    
+
+    // Initialize video writer if enabled (prefWriteVideo in Python version)
+    let mut video_writer: Option<VideoWriter> = if prefs.write_video_enabled {
+        std::fs::create_dir_all("output").context("Failed to create output directory")?;
+        let timestamp = chrono::Local::now().format("%d%b%Y%H%M%S").to_string();
+        let path = format!("output/{}.avi", timestamp);
+        let fourcc = VideoWriter::fourcc('M' as i32, 'J' as i32, 'P' as i32, 'G' as i32)?;
+        let writer = VideoWriter::new(&path, fourcc, 20.0, Size::new(640, 480), true)
+            .with_context(|| format!("Failed to create VideoWriter for {}", path))?;
+        if !writer.is_opened()? {
+            anyhow::bail!("VideoWriter could not be opened for {}", path);
+        }
+        println!("Recording video to {}", path);
+        Some(writer)
+    } else {
+        None
+    };
+
     // State variables for target prediction
     let mut last_cx: Option<f64> = None;
     let mut last_cy: Option<f64> = None;
@@ -112,29 +127,39 @@ fn main() -> Result<()> {
     let mut current_tilt: i32 = 0;
     let mut last_dt: f64 = 0.0;
     let mut max_area: f64 = 0.0;
-    
+
     // Main loop
     loop {
         // Capture frame
         let mut frame = Mat::default();
         cap.read(&mut frame)?;
-        
+
         if frame.empty() {
             continue;
         }
-        
+
+        // Write raw frame to video file (as in Python version)
+        if let Some(ref mut writer) = video_writer {
+            writer.write(&frame)?;
+        }
+
         // Apply Gaussian blur (3x3 kernel as in Python version)
         let mut blurred = Mat::default();
         imgproc::blur(&frame, &mut blurred, Size::new(3, 3), Point::new(-1, -1))?;
-        
+
         // Convert to HSV color space
         let mut hsv = Mat::default();
         imgproc::cvt_color(&blurred, &mut hsv, COLOR_BGR2HSV, 0)?;
-        
+
         // Create mask for target color
         let mut mask = Mat::default();
-        opencv::core::in_range(&hsv, &hsv_range.lower_scalar(), &hsv_range.upper_scalar(), &mut mask)?;
-        
+        opencv::core::in_range(
+            &hsv,
+            &hsv_range.lower_scalar(),
+            &hsv_range.upper_scalar(),
+            &mut mask,
+        )?;
+
         // Find contours
         let mut contours: Vector<Vector<Point>> = Vector::default();
         let mut hierarchy = Mat::default();
@@ -145,13 +170,13 @@ fn main() -> Result<()> {
             CHAIN_APPROX_SIMPLE,
             Point::new(0, 0),
         )?;
-        
+
         // Find largest contour and its centroid
         if let Some(contour_result) = find_largest_contour(&contours) {
             let cx = contour_result.center_x;
             let cy = contour_result.center_y;
             max_area = contour_result.area;
-            
+
             // Draw center point
             imgproc::circle(
                 &mut frame,
@@ -162,37 +187,31 @@ fn main() -> Result<()> {
                 imgproc::LINE_8,
                 0,
             )?;
-            
+
             // Calculate pan/tilt using trig module
             let current_time = clock();
             let (pan, tilt) = if prefs.target_lead_enabled && last_time.is_some() {
                 let dt = current_time - last_time.unwrap();
                 last_dt = dt;
-                cam_to_gun(
-                    cx as f64,
-                    cy as f64,
-                    last_cx,
-                    last_cy,
-                    Some(dt),
-                )
+                cam_to_gun(cx as f64, cy as f64, last_cx, last_cy, Some(dt))
             } else {
                 cam_to_gun(cx as f64, cy as f64, None, None, None)
             };
-            
+
             // Update state for next iteration
             last_time = Some(current_time);
             last_cx = Some(cx as f64);
             last_cy = Some(cy as f64);
             current_pan = pan;
             current_tilt = tilt;
-            
+
             // Send commands to Arduino if enabled
             if let Some(ref mut arduino_serial) = arduino {
                 arduino_serial.send_pan(pan);
                 arduino_serial.send_tilt(tilt);
             }
         }
-        
+
         // Display if enabled
         if prefs.screen_enabled {
             // Draw contours outline
@@ -209,27 +228,27 @@ fn main() -> Result<()> {
                     Point::new(0, 0),
                 )?;
             }
-            
+
             // Draw information overlay
             if last_dt > 0.0 {
                 let time_str = format!("time: {:.1} ms", last_dt * 1000.0);
                 draw_str(&mut frame, 20, 20, &time_str)?;
             }
-            
+
             let area_str = format!("area: {:.1} px", max_area);
             draw_str(&mut frame, 20, 50, &area_str)?;
-            
+
             if current_pan > 0 || current_tilt > 0 {
                 let pan_str = format!("pan: {}", current_pan);
                 let tilt_str = format!("tilt: {}", current_tilt);
                 draw_str(&mut frame, 20, 80, &pan_str)?;
                 draw_str(&mut frame, 20, 110, &tilt_str)?;
             }
-            
+
             // Show frame
             highgui::imshow("frame", &frame)?;
         }
-        
+
         // Check for ESC key (33ms delay for ~30fps)
         let key = highgui::wait_key(33)?;
         if key == 27 {
@@ -237,12 +256,15 @@ fn main() -> Result<()> {
             break;
         }
     }
-    
+
     // Cleanup
     println!("Shutting down...");
     highgui::destroy_all_windows()?;
     cap.release()?;
-    
+    if let Some(mut writer) = video_writer {
+        writer.release()?;
+    }
+
     println!("Goodbye!");
     Ok(())
 }

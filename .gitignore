@@ -1,0 +1,9 @@
+# Rust build artifacts
+/rust/target/
+
+# Recorded videos from colour_track (prefWriteVideo)
+/output/
+
+# Python
+__pycache__/
+*.pyc
