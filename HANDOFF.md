@@ -95,3 +95,7 @@ opencv-Crate 0.92.3 / binding-generator 0.90.2 ist mit clang >= 19 gebrochen (up
 1. Session-Änderungen committen (inkl. dieser HANDOFF-Ergänzung); optional `git rm -r --cached rust/target`.
 2. Hardware-Test auf Zielmaschine: `calibrate_range.exe` (HSV), dann `colour_track.exe` mit Webcam + Arduino (`p<pan>\n`/`t<tilt>\n` @ 115200); dabei `C:\opencv\build\x64\vc16\bin` im PATH lassen (opencv_world4100.dll).
 3. Hinweis für Doku `rust/mackensen_rust.md` Abschnitt 4/5: Der frühere Vermerk "Build auf dieser Maschine nicht möglich" ist überholt — Build läuft seit 2026-11-17 (Details siehe dieser Abschnitt).
+
+### Nachtrag 2026-11-18: Commit & Push erfolgt
+
+Die Session-Änderungen (3 Rust-Quelldateien + Abschnitt 7 dieser Datei) wurden committed und gepusht: Commit `c29917b6f43faa0e09fbfe70357e386abfeb73c9` („20261118 Runable Rust version including working tests and build/make") auf Branch `wpdat/KIHR5_Mistral`; `HEAD` == `origin/wpdat/KIHR5_Mistral`, Working Tree clean. Damit ist "Offen"-Punkt 1 aus Abschnitt 7 erledigt. Verbleibend offen: nur noch der Hardware-Test (Punkt 2) bzw. Doku-Hinweis (Punkt 3).
