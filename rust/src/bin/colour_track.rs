@@ -107,7 +107,7 @@ fn main() -> Result<()> {
         std::fs::create_dir_all("output").context("Failed to create output directory")?;
         let timestamp = chrono::Local::now().format("%d%b%Y%H%M%S").to_string();
         let path = format!("output/{}.avi", timestamp);
-        let fourcc = VideoWriter::fourcc('M' as i32, 'J' as i32, 'P' as i32, 'G' as i32)?;
+        let fourcc = VideoWriter::fourcc('M', 'J', 'P', 'G')?;
         let writer = VideoWriter::new(&path, fourcc, 20.0, Size::new(640, 480), true)
             .with_context(|| format!("Failed to create VideoWriter for {}", path))?;
         if !writer.is_opened()? {
@@ -145,7 +145,13 @@ fn main() -> Result<()> {
 
         // Apply Gaussian blur (3x3 kernel as in Python version)
         let mut blurred = Mat::default();
-        imgproc::blur(&frame, &mut blurred, Size::new(3, 3), Point::new(-1, -1))?;
+        imgproc::blur(
+            &frame,
+            &mut blurred,
+            Size::new(3, 3),
+            Point::new(-1, -1),
+            opencv::core::BORDER_DEFAULT,
+        )?;
 
         // Convert to HSV color space
         let mut hsv = Mat::default();
@@ -218,7 +224,7 @@ fn main() -> Result<()> {
             for cnt in contours.iter() {
                 imgproc::draw_contours(
                     &mut frame,
-                    &Vector::from_slice(&[cnt.clone()]),
+                    &cnt,
                     0,
                     Scalar::new(0.0, 255.0, 0.0, 0.0),
                     3,

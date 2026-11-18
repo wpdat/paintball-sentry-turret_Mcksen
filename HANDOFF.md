@@ -49,3 +49,49 @@ Den Python-2.x-Code des Paintball Sentry Turret Projekts (`trig.py`, `common.py`
 ## 6. Anschluss
 
 Nächster Schritt für die nächste Session: 1) Session-Änderungen committen (`git add .gitignore cross_process_py_rust.md rust/mackensen_rust.md rust/src && git commit -m "..."` auf Branch `wpdat/KIHR5_Mistral`; optional `git rm -r --cached rust/target`). 2) Auf einem Rechner mit OpenCV + SDK bzw. Linux: `cd C:\Users\ronin\orca\workspaces\paintball-sentry-turret_Mcksen\KIHR5_Mistral\rust && ./scripts/install_deps.sh && cargo test && cargo build --release` ausführen, Ausgabe in `rust/mackensen_rust.md` Abschnitt 4/5 eintragen (Abschnitt 5 "nicht ausführbar" ersetzen). 3) Falls Hardware verfügbar: `cargo run --bin calibrate_range`, dann `cargo run --bin colour_track` und Arduino-Protokoll (`p…\n`/`t…\n`) verifizieren. Referenzdokumente für die fachliche Prüfung: `cross_process_py_rust.md` (Prozedur), `FunktionalDokument.md` (Soll-Verhalten), `rust/mackensen_rust.md` (Ist-Stand Rust).
+
+## 7. Ergänzung — Session 2026-11-17 (Build auf dieser Maschine durchgeführt, Vollzug)
+
+Maschinen-Stand zum Session-Start: Commit `33e519d` ("20261117 Rust Ported mit Mistral Agent 01"), working tree clean. Alle vormals fehlenden Komponenten sind inzwischen vorhanden und wurden verifiziert:
+
+| Komponente | Stand | Pfad |
+|---|---|---|
+| Rust stable 1.90.0 (msvc + gnu Targets) | OK | `C:\Users\ronin\.cargo\bin` |
+| MSVC BuildTools 14.44.35207 (cl.exe, link.exe, lib.exe) | OK | `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207` |
+| Windows SDK 10.0.26100.0 (um/x64: kernel32.Lib u.a. 482 Libs, ucrt/x64) | OK | `C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0` |
+| OpenCV 4.10.0 (Welt-Build, vc16: opencv_world4100.lib/.dll, include, OpenCVConfig.cmake) | OK | `C:\opencv\build` |
+| LLVM 23.1.5 via winget (clang.exe, libclang.dll, Resource-Header) | OK | `C:\Program Files\LLVM` |
+| libclang 18.1.1 (PyPI-Wheel) + clang-18 Resource-Header als Workaround (s.u.) | OK | `C:\temp\llvm18` |
+
+### Build-Umgebung (Env-Variablen, keine Repo-Dateien geändert)
+
+`PATH` um `C:\temp\llvm18\bin` (libclang 18.1.1 + clang.exe-Wrapper), MSVC `bin\Hostx64\x64`, `C:\opencv\build\x64\vc16\bin` ergänzt; `INCLUDE`/`LIB` auf MSVC + SDK (um/ucrt/shared) gesetzt; `TMP`/`TEMP` auf `C:\Windows\Temp` (Git-Bash-`TMP=/tmp` bricht `link.exe`); `LIBCLANG_PATH=C:\temp\llvm18\bin`; `OPENCV_INCLUDE_PATHS=C:/opencv/build/include`, `OPENCV_LINK_PATHS=C:/opencv/build/x64/vc16/lib`, `OPENCV_LINK_LIBS=opencv_world4100`. Env-Skript: `C:\temp\rust-env.sh`.
+
+### Warum libclang 18 statt 23 für die Bindings
+
+opencv-Crate 0.92.3 / binding-generator 0.90.2 ist mit clang >= 19 gebrochen (upstream fix erst in 0.93.2, "Fix binding generation using clang-19"; Commit `d33f220` spelling→expansion location). Mit libclang 23 fehlen daher in den generierten Bindings die `VectorExtern`-Instanzen (f32/f64/bool/Range/GpuMat/UMat/VideoCapture) → 113 Compile-Fehler im opencv-Crate. Umgekehrt verweigert die MSVC-STL 14.44 (yvals_core.h STL1000) das Parsen mit clang < 19. Lösung: libclang **18.1.1** (PyPI-Wheel `libclang-18.1.1-py2.py3-none-win_amd64.whl`) + clang-18 Resource-Header (aus `clang-18.1.8.src.tar.xz`, `lib/Headers`) unter `C:\temp\llvm18`, plus `#define _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH 1` am Kopf von `ocvrs_common.hpp` **im Crate-Cache** (`C:\Users\ronin\.cargo\registry\src\...\opencv-0.92.3\src_cpp\ocvrs_common.hpp`) — eine reine Build-Umgebungs-Anpassung, keine Repo-Datei. clang.exe (23) bleibt nur für den Search-Path-Probe im PATH, geparst wird mit libclang 18.
+
+### Ergebnis (Vollzug)
+
+- `cargo test` → RC=0: **16 Unit-Tests + 1 Doc-Test bestanden, 0 fehlgeschlagen** (trig 9, common 6+1 doc, Binaries je 0). Nur Warnings (unused `hierarchy`/`mut`, unread `msg`).
+- `cargo build` (debug) → RC=0; `cargo build --release` → RC=0 (1m58s, LTO). Exes: `rust/target/release/colour_track.exe` (1,3 MB), `calibrate_range.exe` (210 KB); debug Pendant in `target/debug`.
+- `cargo fmt --check` → OK.
+- Smoke-Test: beide Release-Exes starten, laden `opencv_world4100.dll` (OpenCV-4.10.0-Laufzeitfehler gegen fehlende Webcam belegen geladene DLL), Banner OK; Abbruch danach wie erwartet ohne Kamera (`Camera index out of range` → leeren Frame). Hardware-Test (Webcam + Arduino) steht weiterhin aus.
+- opencv-Build-Script: Probe "environment" OK, OpenCV 4.10.0 erkannt, 4 Module (core/imgproc/videoio/highgui) in ~22 s gebunden, C++-Wrapper mit cl.exe OK, Link gegen `opencv_world4100.lib` OK.
+
+### Minimale Code-Anpassungen (opencv-0.92-API, verhaltensgleich; einzige Repo-Änderungen dieser Session)
+
+1. `rust/src/common.rs` `find_largest_contour`: `best_cnt: Option<&Vector<Point>>` → `Option<Vector<Point>>` (in 0.92 liefert `Vector::iter()` owned `T`).
+2. `rust/src/bin/calibrate_range.rs` + `colour_track.rs`: `imgproc::blur(...)` um 5. Arg `opencv::core::BORDER_DEFAULT` ergänzt (cv2.blur-Default).
+3. ebenda: `&Vector::from_slice(&[cnt.clone()])` → `&cnt` (nested `Vector<Vector<Point>>` nicht als `from_slice` nutzbar; `Vector<Point>` ist `ToInputArray` — identisches Zeichenverhalten wie Python `drawContours(frame,contours,-1,...)` pro Kontur).
+4. `calibrate_range.rs`: `get_trackbar_pos(...)?.unwrap_or(x)` → `get_trackbar_pos(...)?` (Rückgabe in 0.92 direkt `Result<i32>`).
+5. `colour_track.rs`: `VideoWriter::fourcc('M' as i32, ...)` → `VideoWriter::fourcc('M','J','P','G')` (Signatur nimmt `char`).
+6. `cargo fmt` nachgezogen (nur Zeilenumbruch der blur-Zeile).
+
+`git status`: nur `rust/src/common.rs`, `rust/src/bin/calibrate_range.rs`, `rust/src/bin/colour_track.rs` modified (noch nicht committed). `rust/target/` ist weiterhin (versehentlich) getrackt — `cargo clean -p opencv` hatte deletions im Working Tree verursacht, per `git checkout -- rust/target` wiederhergestellt.
+
+### Offen
+
+1. Session-Änderungen committen (inkl. dieser HANDOFF-Ergänzung); optional `git rm -r --cached rust/target`.
+2. Hardware-Test auf Zielmaschine: `calibrate_range.exe` (HSV), dann `colour_track.exe` mit Webcam + Arduino (`p<pan>\n`/`t<tilt>\n` @ 115200); dabei `C:\opencv\build\x64\vc16\bin` im PATH lassen (opencv_world4100.dll).
+3. Hinweis für Doku `rust/mackensen_rust.md` Abschnitt 4/5: Der frühere Vermerk "Build auf dieser Maschine nicht möglich" ist überholt — Build läuft seit 2026-11-17 (Details siehe dieser Abschnitt).

@@ -78,19 +78,25 @@ fn main() -> Result<()> {
 
         // Apply blur (3x3 kernel)
         let mut blurred = Mat::default();
-        imgproc::blur(&frame, &mut blurred, Size::new(3, 3), Point::new(-1, -1))?;
+        imgproc::blur(
+            &frame,
+            &mut blurred,
+            Size::new(3, 3),
+            Point::new(-1, -1),
+            opencv::core::BORDER_DEFAULT,
+        )?;
 
         // Convert to HSV
         let mut hsv = Mat::default();
         imgproc::cvt_color(&blurred, &mut hsv, COLOR_BGR2HSV, 0)?;
 
         // Get trackbar positions
-        let h_min = highgui::get_trackbar_pos("H-", "frame")?.unwrap_or(0);
-        let h_max = highgui::get_trackbar_pos("H+", "frame")?.unwrap_or(255);
-        let s_min = highgui::get_trackbar_pos("S-", "frame")?.unwrap_or(0);
-        let s_max = highgui::get_trackbar_pos("S+", "frame")?.unwrap_or(255);
-        let v_min = highgui::get_trackbar_pos("V-", "frame")?.unwrap_or(0);
-        let v_max = highgui::get_trackbar_pos("V+", "frame")?.unwrap_or(255);
+        let h_min = highgui::get_trackbar_pos("H-", "frame")?;
+        let h_max = highgui::get_trackbar_pos("H+", "frame")?;
+        let s_min = highgui::get_trackbar_pos("S-", "frame")?;
+        let s_max = highgui::get_trackbar_pos("S+", "frame")?;
+        let v_min = highgui::get_trackbar_pos("V-", "frame")?;
+        let v_max = highgui::get_trackbar_pos("V+", "frame")?;
 
         // Create HSV range mask
         let lower = Scalar::new(h_min as f64, s_min as f64, v_min as f64, 0.0);
@@ -131,7 +137,7 @@ fn main() -> Result<()> {
         for cnt in contours.iter() {
             imgproc::draw_contours(
                 &mut frame,
-                &Vector::from_slice(&[cnt.clone()]),
+                &cnt,
                 0,
                 Scalar::new(0.0, 255.0, 0.0, 0.0),
                 3,
@@ -164,12 +170,12 @@ fn main() -> Result<()> {
     }
 
     // Print final HSV values for reference
-    let h_min = highgui::get_trackbar_pos("H-", "frame")?.unwrap_or(0);
-    let h_max = highgui::get_trackbar_pos("H+", "frame")?.unwrap_or(255);
-    let s_min = highgui::get_trackbar_pos("S-", "frame")?.unwrap_or(0);
-    let s_max = highgui::get_trackbar_pos("S+", "frame")?.unwrap_or(255);
-    let v_min = highgui::get_trackbar_pos("V-", "frame")?.unwrap_or(0);
-    let v_max = highgui::get_trackbar_pos("V+", "frame")?.unwrap_or(255);
+    let h_min = highgui::get_trackbar_pos("H-", "frame")?;
+    let h_max = highgui::get_trackbar_pos("H+", "frame")?;
+    let s_min = highgui::get_trackbar_pos("S-", "frame")?;
+    let s_max = highgui::get_trackbar_pos("S+", "frame")?;
+    let v_min = highgui::get_trackbar_pos("V-", "frame")?;
+    let v_max = highgui::get_trackbar_pos("V+", "frame")?;
 
     println!("\nFinal HSV Range Values:");
     println!("======================");

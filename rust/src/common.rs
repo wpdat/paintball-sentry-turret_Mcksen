@@ -239,7 +239,7 @@ pub struct ContourResult {
 /// Optional ContourResult with center coordinates and area
 pub fn find_largest_contour(contours: &Vector<Vector<Point>>) -> Option<ContourResult> {
     let mut max_area: f64 = 0.0;
-    let mut best_cnt: Option<&Vector<Point>> = None;
+    let mut best_cnt: Option<Vector<Point>> = None;
 
     for cnt in contours.iter() {
         let area = imgproc::contour_area(&cnt, false).unwrap_or(0.0);
